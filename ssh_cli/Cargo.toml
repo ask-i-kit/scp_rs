@@ -1,0 +1,19 @@
+[package]
+name = "ssh_cli"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+dirs = "6.0.0"
+ssh2 = "0.9"
+eframe = "0.29.1"
+egui = "0.29.1"
+egui_extras = "0.29.1"
+anyhow = "1.0"
+rfd = "0.15"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+encoding_rs = "0.8"
+chrono = "0.4"
+regex = "1.0"
+
