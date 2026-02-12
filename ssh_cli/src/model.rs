@@ -32,6 +32,13 @@ pub struct FavoriteConnection {
     pub password: String, 
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DirectoryBookmark {
+    pub name: String,
+    pub path: String,
+    pub host: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileEncoding {
     Utf8,

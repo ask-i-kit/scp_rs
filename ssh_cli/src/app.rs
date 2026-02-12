@@ -45,6 +45,10 @@ pub struct SshApp {
     favorites: Vec<crate::model::FavoriteConnection>,
     favorite_name_input: String,
 
+    // Directory Bookmarks
+    directory_bookmarks: Vec<crate::model::DirectoryBookmark>,
+    bookmark_name_input: String,
+
     // File Browser State
     files: Vec<FileEntry>,
     selected_file: Option<FileEntry>,
@@ -78,6 +82,8 @@ impl SshApp {
             password: "".to_owned(),
             favorites: Vec::new(),
             favorite_name_input: String::new(),
+            directory_bookmarks: Vec::new(),
+            bookmark_name_input: String::new(),
             files: Vec::new(),
             selected_file: None,
             current_path: String::new(),
@@ -94,6 +100,7 @@ impl SshApp {
 
         println!("App loading favorites...");
         app.favorites = app.load_favorites();
+        app.directory_bookmarks = app.load_directory_bookmarks();
         println!("App initialized.");
 
         // Configure fonts for Japanese support
@@ -413,6 +420,66 @@ impl SshApp {
         }
     }
 
+    fn load_directory_bookmarks(&self) -> Vec<crate::model::DirectoryBookmark> {
+        if let Ok(file) = std::fs::File::open("directory_bookmarks.json") {
+            if let Ok(bookmarks) = serde_json::from_reader(file) {
+                return bookmarks;
+            }
+        }
+        Vec::new()
+    }
+
+    fn save_directory_bookmarks(&self) {
+        if let Ok(file) = std::fs::File::create("directory_bookmarks.json") {
+            let _ = serde_json::to_writer_pretty(file, &self.directory_bookmarks);
+        }
+    }
+
+    fn add_directory_bookmark(&mut self) {
+        if self.bookmark_name_input.is_empty() {
+            self.status_msg = "Bookmark name cannot be empty.".to_owned();
+            return;
+        }
+
+        let new_bookmark = crate::model::DirectoryBookmark {
+            name: self.bookmark_name_input.clone(),
+            path: self.current_path.clone(),
+            host: self.host.clone(),
+        };
+
+        if let Some(pos) = self.directory_bookmarks.iter().position(|b| b.name == new_bookmark.name) {
+            self.directory_bookmarks[pos] = new_bookmark;
+            self.status_msg = format!("Updated bookmark '{}'", self.bookmark_name_input);
+        } else {
+            self.directory_bookmarks.push(new_bookmark);
+            self.status_msg = format!("Added bookmark '{}'", self.bookmark_name_input);
+        }
+        self.save_directory_bookmarks();
+        self.bookmark_name_input.clear();
+    }
+
+    fn delete_directory_bookmark(&mut self) {
+        if self.bookmark_name_input.is_empty() {
+            self.status_msg = "Bookmark name cannot be empty.".to_owned();
+            return;
+        }
+
+        if let Some(pos) = self.directory_bookmarks.iter().position(|b| b.name == self.bookmark_name_input) {
+            self.directory_bookmarks.remove(pos);
+            self.save_directory_bookmarks();
+            self.status_msg = format!("Deleted bookmark '{}'", self.bookmark_name_input);
+            self.bookmark_name_input.clear();
+        } else {
+            self.status_msg = format!("Bookmark '{}' not found", self.bookmark_name_input);
+        }
+    }
+
+    fn navigate_to_bookmark(&mut self, bookmark_path: String) {
+        println!("Navigating to bookmark: {}", bookmark_path);
+        self.is_loading = true;
+        self.list_directory(bookmark_path);
+    }
+
     fn view_file(&self, file_name: String) {
         let sftp_arc = self.sftp.clone();
         let tx = self.sender.clone();
@@ -543,6 +610,49 @@ impl SshApp {
                 if ui.button("Go").clicked() {
                     self.is_loading = true;
                     self.list_directory(self.current_path.clone());
+                }
+            });
+
+            // Bookmarks Bar
+            ui.horizontal(|ui| {
+                ui.label("Bookmarks:");
+                egui::ScrollArea::horizontal().show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        // Filter bookmarks for current host
+                        let current_host_bookmarks: Vec<_> = self.directory_bookmarks
+                            .iter()
+                            .filter(|b| b.host == self.host)
+                            .collect();
+                        
+                        if current_host_bookmarks.is_empty() {
+                            ui.label("(No bookmarks for this host)");
+                        } else {
+                            let mut path_to_navigate: Option<String> = None;
+                            for bookmark in current_host_bookmarks {
+                                if ui.button(&bookmark.name).clicked() {
+                                    println!("Bookmark clicked: {} -> {}", bookmark.name, bookmark.path);
+                                    path_to_navigate = Some(bookmark.path.clone());
+                                    break; // Only handle one click per frame
+                                }
+                            }
+                            // Navigate after the loop to avoid borrow checker issues
+                            if let Some(path) = path_to_navigate {
+                                self.navigate_to_bookmark(path);
+                            }
+                        }
+                    });
+                });
+            });
+
+            // Bookmark Management
+            ui.horizontal(|ui| {
+                ui.label("Bookmark:");
+                ui.text_edit_singleline(&mut self.bookmark_name_input);
+                if ui.button("Add").clicked() {
+                    self.add_directory_bookmark();
+                }
+                if ui.button("Delete").clicked() {
+                    self.delete_directory_bookmark();
                 }
             });
 

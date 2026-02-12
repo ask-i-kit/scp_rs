@@ -1,3 +1,4 @@
+#![windows_subsystem = "windows"]
 mod model;
 mod ssh;
 mod app;
